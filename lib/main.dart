@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'WebView & Chrome',
+      title: 'WebView & PDF Download',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -34,7 +34,7 @@ class WebViewScreen extends StatefulWidget {
 
 class _WebViewScreenState extends State<WebViewScreen> {
   late WebViewController _controller;
-  bool isDownloading = false; // State to track download progress
+  bool isDownloading = false; // Track download status
 
   @override
   void initState() {
@@ -44,8 +44,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (NavigationRequest request) async {
           String url = request.url;
-          if (await _isDownloadable(url)) {
-            _downloadFile(url); // If it's a file, download it
+
+          if (_isPDF(url) || await _isDownloadable(url)) {
+            _downloadFile(url); // Download PDF or other files
             return NavigationDecision.prevent;
           } else if (_shouldOpenInChrome(url)) {
             _openInChrome(url); // Open external links in Chrome
@@ -57,26 +58,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..loadRequest(Uri.parse(widget.url));
   }
 
-  // Function to check if the URL is a downloadable file (checks HTTP headers)
+  // Check if the URL is a direct PDF link
+  bool _isPDF(String url) {
+    return url.toLowerCase().endsWith('.pdf');
+  }
+
+  // Check if the URL is a downloadable file by inspecting HTTP headers
   Future<bool> _isDownloadable(String url) async {
     try {
       Response response = await Dio().head(url);
       String? contentType = response.headers.value('content-type');
 
-      // Check if the content type is a file (e.g., PDF, ZIP, etc.)
       List<String> fileTypes = ['application/pdf', 'application/octet-stream', 'application/zip'];
       return contentType != null && fileTypes.any((type) => contentType.contains(type));
     } catch (e) {
-      return false; // If we can't determine, assume it's not downloadable
+      return false; // Assume not downloadable if request fails
     }
   }
 
-  // Check if the URL should open in Chrome (external domain)
+  // Open external links in Chrome (or default browser)
   bool _shouldOpenInChrome(String url) {
     return Uri.parse(url).host != Uri.parse(widget.url).host;
   }
 
-  // Open link in Chrome (or default browser)
   Future<void> _openInChrome(String url) async {
     Uri uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -84,7 +88,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  // Download the file using Dio
+  // Download and open the file
   Future<void> _downloadFile(String url) async {
     try {
       setState(() {
@@ -92,8 +96,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       });
 
       Dio dio = Dio();
-      var dir = await getApplicationDocumentsDirectory(); // Get local storage path
-      String fileName = "downloaded_file.pdf"; // Default filename (adjust as needed)
+      var dir = await getApplicationDocumentsDirectory();
+      String fileName = url.split('/').last; // Extract filename from URL
       String savePath = '${dir.path}/$fileName';
 
       await dio.download(url, savePath);
@@ -110,25 +114,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  // Handle back button press
+  // Handle back button navigation
   Future<bool> _handleBackPress() async {
     if (await _controller.canGoBack()) {
-      _controller.goBack(); // Navigate back in WebView
-      return false; // Prevent app from closing
+      _controller.goBack();
+      return false;
     }
-    return true; // Allow app to close
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: _handleBackPress, // Intercept back button
+      onWillPop: _handleBackPress,
       child: Scaffold(
         appBar: PreferredSize(
-          preferredSize: Size.fromHeight(8), // Set AppBar height to 30px
+          preferredSize: Size.fromHeight(8), // Small AppBar height
           child: AppBar(
             title: Text(""),
-            centerTitle: true, // Optional: Centers the title
+            centerTitle: true,
           ),
         ),
         body: Stack(
@@ -136,7 +140,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             WebViewWidget(controller: _controller),
             if (isDownloading)
               Container(
-                color: Colors.black.withOpacity(0.5), // Semi-transparent background
+                color: Colors.black.withOpacity(0.5),
                 child: Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 ),
