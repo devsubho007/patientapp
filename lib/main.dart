@@ -97,16 +97,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
       Dio dio = Dio();
       var dir = await getApplicationDocumentsDirectory();
+      //String dir = "/storage/emulated/0/Download";
       String fileName = url.split('/').last; // Extract filename from URL
-      String savePath = '${dir.path}/$fileName';
-
+     String savePath = '${dir.path}/$fileName';
+      //String savePath = "$dir/$fileName";
+      print("File downloaded to: $savePath");
       await dio.download(url, savePath);
 
       setState(() {
         isDownloading = false; // Hide loader when done
       });
 
-      OpenFilex.open(savePath); // Open the downloaded file
+      OpenFilex.open(savePath, type: "application/pdf");// Open the downloaded file
     } catch (e) {
       setState(() {
         isDownloading = false; // Hide loader on error
