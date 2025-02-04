@@ -99,6 +99,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
       var dir = await getApplicationDocumentsDirectory();
       //String dir = "/storage/emulated/0/Download";
       String fileName = url.split('/').last; // Extract filename from URL
+      if(fileName.toLowerCase().endsWith('pdf'))
+        {
+
+        }
+      else
+        {
+          fileName+='.pdf';
+        }
      String savePath = '${dir.path}/$fileName';
       //String savePath = "$dir/$fileName";
       print("File downloaded to: $savePath");
