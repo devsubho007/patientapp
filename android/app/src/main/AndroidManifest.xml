@@ -6,9 +6,11 @@
     <!-- Add permission for internet if needed for file downloads -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
+
         android:label="patientapp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

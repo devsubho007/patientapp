@@ -4,7 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:io';
+import 'dart:async';
 
 void main() {
   runApp(MyApp());
@@ -19,7 +21,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: WebViewScreen(url: "https://portal.themeditek.com/"),
+      home: WebViewScreen(url: "https://demopatient.labexpert.in//Login/Login"),
     );
   }
 }
@@ -34,22 +36,67 @@ class WebViewScreen extends StatefulWidget {
 
 class _WebViewScreenState extends State<WebViewScreen> {
   late WebViewController _controller;
-  bool isDownloading = false; // Track download status
+  bool isDownloading = false;
+  bool isLoading = true;
+  bool isServerDown = false;
+  bool isOffline = false; // Track internet connectivity
+  Timer? _serverTimeout;
 
   @override
   void initState() {
     super.initState();
+    _checkInternetConnection(); // Check internet on start
+  }
+
+  Future<void> _checkInternetConnection() async {
+    var connectivityResult = await Connectivity().checkConnectivity();
+    bool hasInternet = connectivityResult != ConnectivityResult.none;
+
+    if (!hasInternet) {
+      setState(() {
+        isOffline = true;
+      });
+    } else {
+      setState(() {
+        isOffline = false;
+      });
+      _initializeWebView();
+    }
+  }
+
+  void _initializeWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (String url) {
+          setState(() {
+            isLoading = true;
+            isServerDown = false;
+          });
+
+          _serverTimeout = Timer(Duration(seconds: 10), () {
+            setState(() {
+              isServerDown = true;
+              isLoading = false;
+            });
+          });
+        },
+        onPageFinished: (String url) {
+          setState(() {
+            isLoading = false;
+            isServerDown = false;
+          });
+
+          _serverTimeout?.cancel();
+        },
         onNavigationRequest: (NavigationRequest request) async {
           String url = request.url;
 
           if (_isPDF(url) || await _isDownloadable(url)) {
-            _downloadFile(url); // Download PDF or other files
+            _downloadFile(url);
             return NavigationDecision.prevent;
           } else if (_shouldOpenInChrome(url)) {
-            _openInChrome(url); // Open external links in Chrome
+            _openInChrome(url);
             return NavigationDecision.prevent;
           }
           return NavigationDecision.navigate;
@@ -58,12 +105,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..loadRequest(Uri.parse(widget.url));
   }
 
-  // Check if the URL is a direct PDF link
   bool _isPDF(String url) {
     return url.toLowerCase().endsWith('.pdf');
   }
 
-  // Check if the URL is a downloadable file by inspecting HTTP headers
   Future<bool> _isDownloadable(String url) async {
     try {
       Response response = await Dio().head(url);
@@ -72,11 +117,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
       List<String> fileTypes = ['application/pdf', 'application/octet-stream', 'application/zip'];
       return contentType != null && fileTypes.any((type) => contentType.contains(type));
     } catch (e) {
-      return false; // Assume not downloadable if request fails
+      return false;
     }
   }
 
-  // Open external links in Chrome (or default browser)
   bool _shouldOpenInChrome(String url) {
     return Uri.parse(url).host != Uri.parse(widget.url).host;
   }
@@ -88,43 +132,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  // Download and open the file
   Future<void> _downloadFile(String url) async {
     try {
       setState(() {
-        isDownloading = true; // Show loader
+        isDownloading = true;
       });
 
       Dio dio = Dio();
       var dir = await getApplicationDocumentsDirectory();
-      //String dir = "/storage/emulated/0/Download";
-      String fileName = url.split('/').last; // Extract filename from URL
-      if(fileName.toLowerCase().endsWith('pdf'))
-        {
-
-        }
-      else
-        {
-          fileName+='.pdf';
-        }
-     String savePath = '${dir.path}/$fileName';
-      //String savePath = "$dir/$fileName";
-      print("File downloaded to: $savePath");
+      String fileName = url.split('/').last;
+      if (!fileName.toLowerCase().endsWith('.pdf')) {
+        fileName += '.pdf';
+      }
+      String savePath = '${dir.path}/$fileName';
       await dio.download(url, savePath);
 
       setState(() {
-        isDownloading = false; // Hide loader when done
+        isDownloading = false;
       });
 
-      OpenFilex.open(savePath, type: "application/pdf");// Open the downloaded file
+      OpenFilex.open(savePath, type: "application/pdf");
     } catch (e) {
       setState(() {
-        isDownloading = false; // Hide loader on error
+        isDownloading = false;
       });
     }
   }
 
-  // Handle back button navigation
   Future<bool> _handleBackPress() async {
     if (await _controller.canGoBack()) {
       _controller.goBack();
@@ -135,24 +169,104 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (isOffline) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_off, size: 80, color: Colors.red),
+              SizedBox(height: 20),
+              Text(
+                "No Internet Connection",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _checkInternetConnection,
+                child: Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isServerDown) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 80, color: Colors.red),
+              SizedBox(height: 20),
+              Text(
+                "Server is down. Please try again later.",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    isServerDown = false;
+                    isLoading = true;
+                  });
+                  _controller.loadRequest(Uri.parse(widget.url));
+                },
+                child: Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+  /*  if (isDownloading) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                color: Colors.black.withOpacity(0.5),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Colors.blueAccent),
+                      SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }*/
+
     return WillPopScope(
       onWillPop: _handleBackPress,
       child: Scaffold(
         appBar: PreferredSize(
-          preferredSize: Size.fromHeight(8), // Small AppBar height
-          child: AppBar(
-            title: Text(""),
-            centerTitle: true,
-          ),
+          preferredSize: Size.fromHeight(8),
+          child: AppBar(title: Text(""), centerTitle: true),
         ),
         body: Stack(
           children: [
             WebViewWidget(controller: _controller),
-            if (isDownloading)
+
+            if (isLoading||isDownloading)
               Container(
                 color: Colors.black.withOpacity(0.5),
                 child: Center(
-                  child: CircularProgressIndicator(color: Colors.white),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Colors.blueAccent),
+                      SizedBox(height: 10),
+                    ],
+                  ),
                 ),
               ),
           ],

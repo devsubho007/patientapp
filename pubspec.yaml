@@ -28,7 +28,8 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  webview_flutter: ^4.10.0
+  connectivity_plus: ^5.0.2
+  webview_flutter: ^4.4.4
   flutter:
     sdk: flutter
 
@@ -98,8 +99,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-#flutter_icons:
- # android: true
-  #ios: true
- # image_path: "assets/icon.png"
- # adaptive_icon_foreground: "assets/icon.png"
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+  adaptive_icon_background: "#ffffff"  # (Optional for Android)
+  #adaptive_icon_foreground: "assets/icon/adaptive_foreground.png"
